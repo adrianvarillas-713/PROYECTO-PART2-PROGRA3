@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "arbol_avl.hpp"
 #include "buscador.hpp"
 #include "catalogo.hpp"
 #include "estado_usuario.hpp"
@@ -14,7 +15,6 @@ namespace pf {
 
 // ============================================================================
 // 1. PATRON DE CREACION: SINGLETON (Teoria 10)
-// Garantiza una unica instancia en memoria del catalogo, indice y buscador.
 // ============================================================================
 class MotorStream {
 private:
@@ -22,31 +22,33 @@ private:
 
   Catalogo catalogo_;
   Indice indice_;
+  ArbolAVLAnios arbolAnios_;
   std::unique_ptr<Buscador> buscador_;
   std::unique_ptr<Recomendador> recomendador_;
   bool inicializado_ = false;
+  std::string rutaCsvActiva_;
 
-  // Constructor privado
   MotorStream() = default;
 
 public:
-  // Evitar copias del Singleton
   MotorStream(const MotorStream &) = delete;
   MotorStream &operator=(const MotorStream &) = delete;
 
   static MotorStream *getInstance();
 
-  void inicializar(const std::string &rutaCsv, bool usarCache = true);
+  bool inicializar(const std::string &rutaCsv, bool usarCache = true);
+  bool estaInicializado() const { return inicializado_; }
+  const std::string &rutaCsvActiva() const { return rutaCsvActiva_; }
 
   const Catalogo &catalogo() const { return catalogo_; }
   const Indice &indice() const { return indice_; }
+  const ArbolAVLAnios &arbolAnios() const { return arbolAnios_; }
   const Buscador &buscador() const { return *buscador_; }
   const Recomendador &recomendador() const { return *recomendador_; }
 };
 
 // ============================================================================
 // 2. PATRON DE CREACION: BUILDER (Teoria 10)
-// Construye paso a paso una Consulta filtrada mediante encadenamiento.
 // ============================================================================
 class ConsultaBuilder {
 private:
@@ -65,13 +67,11 @@ public:
   ConsultaBuilder &origen(const std::string &o);
   ConsultaBuilder &anio(int a);
 
-  // Construye y parsea la Consulta usando el Buscador activo
   Consulta build(const Buscador &buscador) const;
 };
 
 // ============================================================================
 // 3. PATRON DE ESTRUCTURA: PROXY (Teoria 11)
-// Controla el acceso (permisos/region) y audita antes de reproducir el video.
 // ============================================================================
 class IPeliculaReproducible {
 public:
@@ -106,7 +106,6 @@ public:
 
 // ============================================================================
 // 4. PATRON DE COMPORTAMIENTO: MEMENTO (Teoria 11)
-// Guarda y restaura puntos de restauracion de EstadoUsuario (Deshacer).
 // ============================================================================
 class MementoUsuario {
 private:
@@ -120,7 +119,6 @@ public:
   const std::vector<int> &getVerMasTarde() const { return verMasTarde_; }
 };
 
-// Originator: crea y restaura instantaneas del EstadoUsuario
 class GestorEstadoUsuario {
 private:
   EstadoUsuario &estado_;
@@ -137,7 +135,6 @@ public:
   const EstadoUsuario &estado() const { return estado_; }
 };
 
-// Caretaker (Historial): administra la pila de estados guardados
 class HistorialUsuario {
 private:
   std::vector<MementoUsuario> estados_;
@@ -145,6 +142,7 @@ private:
 public:
   void agregarEstado(const MementoUsuario &estado);
   bool hayHistorial() const { return !estados_.empty(); }
+  size_t cantidad() const { return estados_.size(); }
   MementoUsuario getEstadoAnterior();
 };
 
