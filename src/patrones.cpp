@@ -7,7 +7,7 @@
 namespace pf {
 
 // ============================================================================
-// 1. IMPLEMENTACION SINGLETON
+// 1. SINGLETON
 // ============================================================================
 MotorStream *MotorStream::instancia_ = nullptr;
 
@@ -18,11 +18,25 @@ MotorStream *MotorStream::getInstance() {
   return instancia_;
 }
 
-void MotorStream::inicializar(const std::string &rutaCsv, bool usarCache) {
-  if (inicializado_) return;
+bool MotorStream::inicializar(const std::string &rutaCsv, bool usarCache) {
+  if (inicializado_) return true;
 
-  const std::string rutaCache = rutaCsv + ".cache";
-  std::ifstream f(rutaCsv, std::ios::binary | std::ios::ate);
+  // Buscar el CSV tanto en ruta directa como en ../ (util si se ejecuta desde /build)
+  std::string rutaFinal = rutaCsv;
+  std::ifstream prueba(rutaFinal, std::ios::binary);
+  if (!prueba) {
+    std::string alternativa = "../" + rutaCsv;
+    std::ifstream pruebaAlt(alternativa, std::ios::binary);
+    if (pruebaAlt) {
+      rutaFinal = alternativa;
+    } else {
+      return false;
+    }
+  }
+  rutaCsvActiva_ = rutaFinal;
+
+  const std::string rutaCache = rutaFinal + ".cache";
+  std::ifstream f(rutaFinal, std::ios::binary | std::ios::ate);
   const uint64_t huella = f ? static_cast<uint64_t>(f.tellg()) : 0;
 
   EstadisticasIndice ei;
@@ -31,20 +45,22 @@ void MotorStream::inicializar(const std::string &rutaCsv, bool usarCache) {
     cargado = indice_.cargarCache(rutaCache, catalogo_, huella, ei);
   }
   if (!cargado) {
-    catalogo_.cargarDesdeCSV(rutaCsv);
+    catalogo_.cargarDesdeCSV(rutaFinal);
     indice_.construir(catalogo_);
     if (usarCache && huella != 0) {
       indice_.guardarCache(rutaCache, catalogo_, huella);
     }
   }
 
+  arbolAnios_.construirDesdeCatalogo(catalogo_);
   buscador_ = std::make_unique<Buscador>(catalogo_, indice_);
   recomendador_ = std::make_unique<Recomendador>(catalogo_, indice_);
   inicializado_ = true;
+  return true;
 }
 
 // ============================================================================
-// 2. IMPLEMENTACION BUILDER
+// 2. BUILDER
 // ============================================================================
 ConsultaBuilder &ConsultaBuilder::texto(const std::string &t) {
   textoLibre_ = t;
@@ -86,20 +102,23 @@ Consulta ConsultaBuilder::build(const Buscador &buscador) const {
   if (anio_ > 0) cadenaConsulta += "anio:" + std::to_string(anio_);
 
   if (cadenaConsulta.empty()) {
-    throw std::runtime_error("ConsultaBuilder: no se especificaron criterios.");
+    Consulta vacia;
+    vacia.valida = false;
+    vacia.mensaje = "Ingresa al menos un filtro o palabra clave.";
+    return vacia;
   }
   return buscador.interpretar(cadenaConsulta);
 }
 
 // ============================================================================
-// 3. IMPLEMENTACION PROXY
+// 3. PROXY
 // ============================================================================
 PeliculaReal::PeliculaReal(std::string titulo, std::string url)
     : titulo_(std::move(titulo)), url_(std::move(url)) {}
 
 std::string PeliculaReal::reproducir() {
-  std::string info = "Reproduciendo: " + titulo_;
-  if (!url_.empty()) info += " | Fuente: " + url_;
+  std::string info = "Reproduciendo ahora: \"" + titulo_ + "\"";
+  if (!url_.empty()) info += "\nFuente Wiki/Stream: " + url_;
   return info;
 }
 
@@ -112,18 +131,17 @@ ProxyPelicula::ProxyPelicula(const Pelicula &pelicula, int docId,
 
 std::string ProxyPelicula::reproducir() {
   if (!cuentaActiva_) {
-    return "Acceso denegado: Se requiere suscripcion activa para ver este titulo.";
+    return "[PROXY BLOQUEADO] Tu suscripcion no esta activa. Activa tu cuenta para reproducir.";
   }
   if (!regionPermitida_) {
-    return "Restriccion geografica: Titulo no disponible en tu region.";
+    return "[PROXY BLOQUEADO] Contenido restringido en tu region geografica.";
   }
-  // Auditoria automatica antes de delegar al objeto real
   estadoUsuario_.marcarVisto(docId_);
-  return peliculaReal_.reproducir();
+  return "[PROXY AUTORIZADO] " + peliculaReal_.reproducir();
 }
 
 // ============================================================================
-// 4. IMPLEMENTACION MEMENTO
+// 4. MEMENTO
 // ============================================================================
 MementoUsuario::MementoUsuario(std::vector<int> meGusta,
                                std::vector<int> verMasTarde)
