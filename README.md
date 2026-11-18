@@ -486,3 +486,22 @@ Latencias por tipo de consulta:
   lo que sube el pico de RSS a 426 MB. Un `mmap` del archivo evitaría la copia.
 * **Corpus en inglés.** Las stopwords y los ejemplos son en inglés; buscar
   `barco` devuelve casi nada porque el dataset no está en español.
+
+  ## Novedades — Parte 2 (Arquitectura, Paralelismo e Interfaz Gráfica)
+
+### Nuevos Módulos
+* `src/arbol_avl.hpp` / `src/arbol_avl.cpp`: **Árbol AVL (`ArbolAVLAnios`)** autobalanceado por rotaciones para filtrar películas por rango de años en $O(\log N + k)$, complementando `TriePrefijos` y `TrieSufijos`.
+* `src/patrones.hpp` / `src/patrones.cpp`: Implementación de **4 Patrones de Diseño**:
+  * **Singleton (`MotorStream`)**: Única instancia en memoria del catálogo, índice invertido, buscador, recomendador y árbol AVL.
+  * **Builder (`ConsultaBuilder`)**: Construcción fluida paso a paso de consultas multicriterio (texto, director, género, origen, año).
+  * **Proxy (`ProxyPelicula`)**: Control de acceso por suscripción/región y auditoría automática antes de reproducir.
+  * **Memento (`MementoUsuario`, `GestorEstadoUsuario`, `HistorialUsuario`)**: Puntos de restauración para deshacer (*Undo*) cambios en *Me gusta* y *Ver más tarde*.
+* `src/paralelo.hpp` / `src/paralelo.cpp`: **Programación Paralela (`MotorParalelo`)** con `std::thread` y `std::async` (esquema Map-Reduce para normalización/inserción de strings en Trie, re-ranking de frases en paralelo y benchmark secuencial vs. paralelo).
+* `src/gui_main.cpp`: **Interfaz Gráfica** construida con **Dear ImGui + GLFW + OpenGL 3.3**.
+
+### Compilación con CMake
+Requiere un compilador compatible con **C++17**, **CMake >= 3.16** y **OpenGL** (GLFW e ImGui se descargan automáticamente al configurar):
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
